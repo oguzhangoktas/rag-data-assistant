@@ -1,0 +1,247 @@
+# =============================================================================
+# Database Schema Configuration for SQL Generation
+# Author: Oguzhan Goktas (oguzhangoktas22@gmail.com)
+# =============================================================================
+
+database:
+  dialect: "postgresql"
+  name: "ecommerce_analytics"
+  description: "E-commerce analytics data warehouse containing customer, order, and product data"
+
+schemas:
+  public:
+    description: "Main schema containing all business tables"
+    
+    tables:
+      customers:
+        description: "Customer master data including demographics and lifetime value"
+        columns:
+          customer_id:
+            type: "INTEGER"
+            primary_key: true
+            description: "Unique customer identifier"
+          email:
+            type: "VARCHAR(255)"
+            nullable: false
+            description: "Customer email address (unique)"
+            pii: true
+          full_name:
+            type: "VARCHAR(255)"
+            nullable: false
+            description: "Customer full name"
+            pii: true
+          registration_date:
+            type: "DATE"
+            nullable: false
+            description: "Date when customer registered"
+          country:
+            type: "VARCHAR(100)"
+            nullable: true
+            description: "Customer country (ISO code)"
+          total_lifetime_value:
+            type: "DECIMAL(15,2)"
+            nullable: true
+            description: "Calculated total revenue from this customer"
+        indexes:
+          - columns: ["email"]
+            unique: true
+          - columns: ["registration_date"]
+          - columns: ["country"]
+        sample_queries:
+          - question: "Get customer by email"
+            sql: "SELECT * FROM customers WHERE email = :email"
+          - question: "Top customers by lifetime value"
+            sql: "SELECT * FROM customers ORDER BY total_lifetime_value DESC LIMIT 10"
+
+      orders:
+        description: "Order transactions with status and payment information"
+        columns:
+          order_id:
+            type: "INTEGER"
+            primary_key: true
+            description: "Unique order identifier"
+          customer_id:
+            type: "INTEGER"
+            nullable: false
+            foreign_key: "customers.customer_id"
+            description: "Reference to customer who placed the order"
+          order_date:
+            type: "TIMESTAMP"
+            nullable: false
+            description: "Date and time when order was placed"
+          total_amount:
+            type: "DECIMAL(15,2)"
+            nullable: false
+            description: "Total order amount in USD"
+          status:
+            type: "VARCHAR(50)"
+            nullable: false
+            description: "Order status: pending, completed, cancelled, refunded"
+            enum_values: ["pending", "completed", "cancelled", "refunded"]
+          payment_method:
+            type: "VARCHAR(50)"
+            nullable: true
+            description: "Payment method used: credit_card, paypal, bank_transfer"
+            enum_values: ["credit_card", "paypal", "bank_transfer"]
+        indexes:
+          - columns: ["customer_id"]
+          - columns: ["order_date"]
+          - columns: ["status"]
+        relationships:
+          - table: "customers"
+            type: "many_to_one"
+            columns: ["customer_id"]
+        sample_queries:
+          - question: "Orders in date range"
+            sql: "SELECT * FROM orders WHERE order_date BETWEEN :start_date AND :end_date"
+          - question: "Revenue by status"
+            sql: "SELECT status, SUM(total_amount) as revenue FROM orders GROUP BY status"
+
+      order_items:
+        description: "Line items for each order with product and quantity details"
+        columns:
+          item_id:
+            type: "INTEGER"
+            primary_key: true
+            description: "Unique order item identifier"
+          order_id:
+            type: "INTEGER"
+            nullable: false
+            foreign_key: "orders.order_id"
+            description: "Reference to parent order"
+          product_id:
+            type: "INTEGER"
+            nullable: false
+            foreign_key: "products.product_id"
+            description: "Reference to product"
+          quantity:
+            type: "INTEGER"
+            nullable: false
+            description: "Number of units ordered"
+          price:
+            type: "DECIMAL(15,2)"
+            nullable: false
+            description: "Price per unit at time of order"
+        indexes:
+          - columns: ["order_id"]
+          - columns: ["product_id"]
+        relationships:
+          - table: "orders"
+            type: "many_to_one"
+            columns: ["order_id"]
+          - table: "products"
+            type: "many_to_one"
+            columns: ["product_id"]
+
+      products:
+        description: "Product catalog with pricing and inventory information"
+        columns:
+          product_id:
+            type: "INTEGER"
+            primary_key: true
+            description: "Unique product identifier"
+          name:
+            type: "VARCHAR(255)"
+            nullable: false
+            description: "Product name"
+          category:
+            type: "VARCHAR(100)"
+            nullable: true
+            description: "Product category"
+          price:
+            type: "DECIMAL(15,2)"
+            nullable: false
+            description: "Current product price in USD"
+          stock_quantity:
+            type: "INTEGER"
+            nullable: true
+            description: "Current inventory quantity"
+        indexes:
+          - columns: ["category"]
+          - columns: ["name"]
+        sample_queries:
+          - question: "Products by category"
+            sql: "SELECT * FROM products WHERE category = :category"
+          - question: "Low stock products"
+            sql: "SELECT * FROM products WHERE stock_quantity < 10"
+
+      query_history:
+        description: "System table tracking all natural language queries and generated SQL"
+        is_system_table: true
+        columns:
+          query_id:
+            type: "INTEGER"
+            primary_key: true
+            description: "Unique query identifier"
+          user_question:
+            type: "TEXT"
+            nullable: false
+            description: "Original natural language question"
+          generated_sql:
+            type: "TEXT"
+            nullable: false
+            description: "SQL query generated by the system"
+          execution_time_ms:
+            type: "INTEGER"
+            nullable: true
+            description: "Query execution time in milliseconds"
+          row_count:
+            type: "INTEGER"
+            nullable: true
+            description: "Number of rows returned"
+          feedback_score:
+            type: "INTEGER"
+            nullable: true
+            description: "User feedback score 1-5"
+          created_at:
+            type: "TIMESTAMP"
+            nullable: false
+            description: "Timestamp when query was executed"
+
+common_patterns:
+  date_filters:
+    - pattern: "this month"
+      sql: "DATE_TRUNC('month', CURRENT_DATE)"
+    - pattern: "last month"
+      sql: "DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')"
+    - pattern: "this quarter"
+      sql: "DATE_TRUNC('quarter', CURRENT_DATE)"
+    - pattern: "this year"
+      sql: "DATE_TRUNC('year', CURRENT_DATE)"
+    - pattern: "last 7 days"
+      sql: "CURRENT_DATE - INTERVAL '7 days'"
+    - pattern: "last 30 days"
+      sql: "CURRENT_DATE - INTERVAL '30 days'"
+
+  aggregations:
+    - pattern: "total"
+      sql: "SUM"
+    - pattern: "average"
+      sql: "AVG"
+    - pattern: "count"
+      sql: "COUNT"
+    - pattern: "maximum"
+      sql: "MAX"
+    - pattern: "minimum"
+      sql: "MIN"
+
+  metrics:
+    revenue:
+      description: "Total revenue calculated from completed orders"
+      sql: "SUM(total_amount) FILTER (WHERE status = 'completed')"
+    aov:
+      description: "Average Order Value"
+      sql: "AVG(total_amount)"
+    customer_count:
+      description: "Number of unique customers"
+      sql: "COUNT(DISTINCT customer_id)"
+    clv:
+      description: "Customer Lifetime Value from customers table"
+      sql: "total_lifetime_value"
+
+sql_generation:
+  default_limit: 100
+  max_limit: 1000
+  always_include_order_by: true
+  prefer_explicit_columns: true
+  use_table_aliases: true

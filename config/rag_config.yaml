@@ -1,0 +1,126 @@
+# =============================================================================
+# RAG (Retrieval Augmented Generation) Configuration
+# Author: Oguzhan Goktas (oguzhangoktas22@gmail.com)
+# =============================================================================
+
+vector_store:
+  provider: "chromadb"
+  settings:
+    host: "localhost"
+    port: 8000
+    persist_directory: "./chroma_data"
+    collection_name: "documentation"
+  index:
+    distance_metric: "cosine"
+    embedding_dimensions: 1536
+
+embeddings:
+  provider: "openai"
+  model: "text-embedding-3-small"
+  dimensions: 1536
+  batch_size: 100
+  max_retries: 3
+  cache:
+    enabled: true
+    ttl_seconds: 86400
+    max_size: 10000
+
+chunking:
+  strategy: "recursive"
+  settings:
+    chunk_size: 512
+    chunk_overlap: 50
+    min_chunk_size: 100
+    max_chunk_size: 1000
+  separators:
+    - "\n\n"
+    - "\n"
+    - ". "
+    - " "
+    - ""
+  metadata_extraction:
+    extract_title: true
+    extract_headers: true
+    extract_dates: true
+
+retrieval:
+  top_k: 5
+  similarity_threshold: 0.7
+  reranking:
+    enabled: true
+    method: "cross_encoder"
+    top_k_rerank: 10
+  filters:
+    by_source: true
+    by_date: true
+    by_document_type: true
+  hybrid_search:
+    enabled: false
+    keyword_weight: 0.3
+    semantic_weight: 0.7
+
+context_building:
+  max_context_tokens: 4000
+  include_metadata: true
+  citation_format: "[Source: {source}, Section: {section}]"
+  deduplication:
+    enabled: true
+    similarity_threshold: 0.95
+
+document_types:
+  markdown:
+    enabled: true
+    extensions:
+      - ".md"
+      - ".markdown"
+    parser: "markdown"
+  
+  pdf:
+    enabled: true
+    extensions:
+      - ".pdf"
+    parser: "pypdf2"
+    extract_images: false
+  
+  csv:
+    enabled: true
+    extensions:
+      - ".csv"
+    parser: "pandas"
+    max_rows: 1000
+  
+  json:
+    enabled: true
+    extensions:
+      - ".json"
+    parser: "json"
+
+ingestion:
+  batch_size: 50
+  parallel_workers: 4
+  incremental:
+    enabled: true
+    hash_check: true
+  deduplication:
+    enabled: true
+    method: "content_hash"
+
+quality_metrics:
+  context_relevance:
+    enabled: true
+    threshold: 0.7
+  answer_relevance:
+    enabled: true
+    threshold: 0.8
+  faithfulness:
+    enabled: true
+    threshold: 0.85
+  retrieval_precision:
+    enabled: true
+    threshold: 0.7
+
+monitoring:
+  track_retrieval_latency: true
+  track_embedding_latency: true
+  track_chunk_stats: true
+  log_retrieved_chunks: false
